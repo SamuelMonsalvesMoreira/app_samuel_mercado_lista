@@ -29,27 +29,26 @@ class _Tela4ViewState extends State<Tela4View> {
 
   List<Map<String, dynamic>> _itensFiltrados = [];
   String? _listaSelecionada;
+  String _termoPesquisa = '';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Text('Lista', style: TextStyle(fontSize: 20)),
-
-            Spacer(),
-            ElevatedButton(
-              onPressed: _criarNovaLista,
-              child: Text('Criar Lista'),
-            ),
-            SizedBox(width: 8), // Espaçamento entre botões
-            ElevatedButton(
-              onPressed: _excluirLista,
-              child: Text('Excluir Lista'),
-            ),
-          ],
-        ),
+        title: Text('Lista', style: TextStyle(fontSize: 20)),
+        // Os botões ficam em "actions" para não estourar a largura
+        // do título em telas estreitas.
+        actions: [
+          TextButton(
+            onPressed: _criarNovaLista,
+            child: Text('Criar Lista'),
+          ),
+          TextButton(
+            onPressed: _excluirLista,
+            child: Text('Excluir Lista'),
+          ),
+          SizedBox(width: 8),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -57,7 +56,10 @@ class _Tela4ViewState extends State<Tela4View> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DropdownButtonFormField<String>(
-              value: _listaSelecionada,
+              // A key muda junto com a seleção para o campo refletir
+              // listas criadas ou excluídas.
+              key: ValueKey(_listaSelecionada),
+              initialValue: _listaSelecionada,
               items: _listasDeCompras.map((lista) {
                 return DropdownMenuItem<String>(
                   value: lista['nome'],
@@ -65,10 +67,7 @@ class _Tela4ViewState extends State<Tela4View> {
                 );
               }).toList(),
               onChanged: (value) {
-                setState(() {
-                  _listaSelecionada = value;
-                  _filtrarItens(value!);
-                });
+                _selecionarLista(value);
               },
               decoration: InputDecoration(
                 labelText: 'Selecione uma Lista',
@@ -80,8 +79,10 @@ class _Tela4ViewState extends State<Tela4View> {
               controller: _pesquisaController,
               decoration: InputDecoration(
                 labelText: 'Termo de Pesquisa',
+                helperText: 'Deixe vazio e pesquise para ver todos os itens',
                 border: OutlineInputBorder(),
               ),
+              onSubmitted: (_) => _pesquisarItem(),
             ),
             SizedBox(height: 20),
             Row(
@@ -121,32 +122,32 @@ class _Tela4ViewState extends State<Tela4View> {
               child: ListView.builder(
                 itemCount: _itensFiltrados.length,
                 itemBuilder: (context, index) {
+                  final item = _itensFiltrados[index];
                   return ListTile(
-                    title: Text(_itensFiltrados[index]['nome']),
-                    subtitle: Text(
-                        'Quantidade: ${_itensFiltrados[index]['quantidade']}'),
+                    title: Text(item['nome']),
+                    subtitle: Text('Quantidade: ${item['quantidade']}'),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
                           icon: Icon(Icons.edit),
                           onPressed: () {
-                            _editarItemDaLista(index);
+                            _editarItemDaLista(item);
                           },
                         ),
                         IconButton(
                           icon: Icon(Icons.delete),
                           onPressed: () {
-                            _removerItemDaLista(index);
+                            _removerItemDaLista(item);
                           },
                         ),
                         IconButton(
-                          icon: _itensFiltrados[index]['comprado']
+                          icon: item['comprado']
                               ? Icon(Icons.check_circle, color: Colors.green)
                               : Icon(Icons.check_circle_outline,
                                   color: Colors.grey),
                           onPressed: () {
-                            _alternarCompraItem(index);
+                            _alternarCompraItem(item);
                           },
                         ),
                       ],
@@ -158,7 +159,8 @@ class _Tela4ViewState extends State<Tela4View> {
             SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                Navigator.pushNamed(context, 't1');
+                // Volta para a tela de login sem empilhar novas telas.
+                Navigator.popUntil(context, (route) => route.isFirst);
               },
               child: Text('Voltar'),
             ),
@@ -168,10 +170,46 @@ class _Tela4ViewState extends State<Tela4View> {
     );
   }
 
+  void _mostrarMensagem(String mensagem) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensagem)),
+    );
+  }
+
+  /// Itens da lista selecionada, sem filtro.
+  List<dynamic> _itensDaListaSelecionada() {
+    for (var lista in _listasDeCompras) {
+      if (lista['nome'] == _listaSelecionada) {
+        return lista['itens'];
+      }
+    }
+    return [];
+  }
+
+  /// Recalcula os itens exibidos a partir da lista completa
+  /// e do termo de pesquisa atual.
+  void _atualizarItensExibidos() {
+    final termo = _termoPesquisa.toLowerCase();
+    _itensFiltrados = _itensDaListaSelecionada()
+        .cast<Map<String, dynamic>>()
+        .where((item) =>
+            termo.isEmpty ||
+            (item['nome'] as String).toLowerCase().contains(termo))
+        .toList();
+  }
+
+  void _selecionarLista(String? nomeLista) {
+    setState(() {
+      _listaSelecionada = nomeLista;
+      _atualizarItensExibidos();
+    });
+  }
+
   void _criarNovaLista() {
+    _novaListaController.clear();
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: Text('Criar Nova Lista'),
           content: TextField(
@@ -184,20 +222,28 @@ class _Tela4ViewState extends State<Tela4View> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
               },
               child: Text('Cancelar'),
             ),
             ElevatedButton(
               onPressed: () {
+                String nomeLista = _novaListaController.text.trim();
+                if (nomeLista.isEmpty) {
+                  return;
+                }
+                final jaExiste = _listasDeCompras.any((lista) =>
+                    (lista['nome'] as String).toLowerCase() ==
+                    nomeLista.toLowerCase());
+                if (jaExiste) {
+                  _mostrarMensagem('Já existe uma lista com esse nome.');
+                  return;
+                }
+                Navigator.pop(dialogContext);
                 setState(() {
-                  String nomeLista = _novaListaController.text.trim();
-                  if (nomeLista.isNotEmpty) {
-                    _listasDeCompras.add({'nome': nomeLista, 'itens': []});
-                    _listaSelecionada = nomeLista;
-                    _filtrarItens(nomeLista);
-                    Navigator.pop(context);
-                  }
+                  _listasDeCompras.add({'nome': nomeLista, 'itens': []});
+                  _listaSelecionada = nomeLista;
+                  _atualizarItensExibidos();
                 });
               },
               child: Text('Criar'),
@@ -209,17 +255,21 @@ class _Tela4ViewState extends State<Tela4View> {
   }
 
   void _excluirLista() {
+    if (_listaSelecionada == null) {
+      _mostrarMensagem('Selecione uma lista para excluir.');
+      return;
+    }
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: Text('Excluir Lista'),
-          content:
-              Text('Tem certeza de que deseja excluir a lista selecionada?'),
+          content: Text(
+              'Tem certeza de que deseja excluir a lista "$_listaSelecionada"?'),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
               },
               child: Text('Cancelar'),
             ),
@@ -229,9 +279,9 @@ class _Tela4ViewState extends State<Tela4View> {
                   _listasDeCompras.removeWhere(
                       (lista) => lista['nome'] == _listaSelecionada);
                   _listaSelecionada = null;
-                  _itensFiltrados.clear();
+                  _itensFiltrados = [];
                 });
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
               },
               child: Text('Excluir'),
             ),
@@ -249,49 +299,37 @@ class _Tela4ViewState extends State<Tela4View> {
         quantidadeItem.isNotEmpty &&
         _listaSelecionada != null) {
       setState(() {
-        for (var lista in _listasDeCompras) {
-          if (lista['nome'] == _listaSelecionada) {
-            lista['itens'].add({
-              'nome': nomeItem,
-              'quantidade': quantidadeItem,
-              'comprado': false,
-            });
-            break;
-          }
-        }
-        _filtrarItens(_listaSelecionada!);
+        _itensDaListaSelecionada().add({
+          'nome': nomeItem,
+          'quantidade': quantidadeItem,
+          'comprado': false,
+        });
+        _atualizarItensExibidos();
         _itemController.clear();
         _quantidadeController.clear();
       });
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Selecione uma lista e preencha nome e quantidade do item.'),
-        ),
-      );
+      _mostrarMensagem(
+          'Selecione uma lista e preencha nome e quantidade do item.');
     }
   }
 
-  void _editarItemDaLista(int index) {
-    String nomeItem = _itensFiltrados[index]['nome'];
-    String quantidadeItem = _itensFiltrados[index]['quantidade'];
+  void _editarItemDaLista(Map<String, dynamic> item) {
+    final quantidadeController =
+        TextEditingController(text: item['quantidade']);
 
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: Text('Editar Item'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Nome: $nomeItem'),
+              Text('Nome: ${item['nome']}'),
               TextField(
-                controller: TextEditingController(text: quantidadeItem),
+                controller: quantidadeController,
                 keyboardType: TextInputType.number,
-                onChanged: (value) {
-                  quantidadeItem = value;
-                },
                 decoration: InputDecoration(
                   labelText: 'Nova Quantidade',
                 ),
@@ -301,80 +339,48 @@ class _Tela4ViewState extends State<Tela4View> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
               },
               child: Text('Cancelar'),
             ),
             ElevatedButton(
               onPressed: () {
+                final novaQuantidade = quantidadeController.text.trim();
+                if (novaQuantidade.isEmpty) {
+                  _mostrarMensagem('Informe a quantidade.');
+                  return;
+                }
                 setState(() {
-                  _itensFiltrados[index]['quantidade'] = quantidadeItem;
+                  item['quantidade'] = novaQuantidade;
                 });
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
               },
               child: Text('Salvar'),
             ),
           ],
         );
       },
-    );
+    ).then((_) => quantidadeController.dispose());
   }
 
-  void _removerItemDaLista(int index) {
+  void _removerItemDaLista(Map<String, dynamic> item) {
     setState(() {
-      for (var lista in _listasDeCompras) {
-        if (lista['nome'] == _listaSelecionada) {
-          lista['itens'].removeAt(index);
-          break;
-        }
-      }
-      _filtrarItens(_listaSelecionada!);
+      _itensDaListaSelecionada().remove(item);
+      _atualizarItensExibidos();
     });
   }
 
-  void _alternarCompraItem(int index) {
+  void _alternarCompraItem(Map<String, dynamic> item) {
     setState(() {
-      for (var lista in _listasDeCompras) {
-        if (lista['nome'] == _listaSelecionada) {
-          lista['itens'][index]['comprado'] =
-              !lista['itens'][index]['comprado'];
-          break;
-        }
-      }
-    });
-  }
-
-  void _filtrarItens(String listaSelecionada) {
-    setState(() {
-      for (var lista in _listasDeCompras) {
-        if (lista['nome'] == listaSelecionada) {
-          _itensFiltrados = List.from(lista['itens']);
-          break;
-        }
-      }
+      item['comprado'] = !item['comprado'];
     });
   }
 
   void _pesquisarItem() {
-    String termoPesquisa = _pesquisaController.text.trim().toLowerCase();
-    if (termoPesquisa.isNotEmpty) {
-      setState(() {
-        _itensFiltrados = _itensFiltrados.where((item) {
-          return item['nome'].toLowerCase().contains(termoPesquisa);
-        }).toList();
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Insira um termo de pesquisa válido.'),
-        ),
-      );
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
+    setState(() {
+      _termoPesquisa = _pesquisaController.text.trim();
+      _atualizarItensExibidos();
+    });
   }
 
   @override

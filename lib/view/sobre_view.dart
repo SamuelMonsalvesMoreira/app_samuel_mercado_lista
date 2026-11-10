@@ -22,7 +22,7 @@ class SobreView extends StatelessWidget {
             ),
             SizedBox(height: 8),
             Text(
-              '"Coloque aqui o tema escolhido : Lista de Compras"',
+              'Lista de compras',
               style: TextStyle(fontSize: 16),
             ),
             SizedBox(height: 20),
@@ -35,7 +35,7 @@ class SobreView extends StatelessWidget {
             ),
             SizedBox(height: 8),
             Text(
-              '"Coloque aqui o objetivo do aplicativo : Objetivo aplicativo de lista de compras"',
+              'Organizar listas de compras: criar listas, adicionar itens com quantidade, pesquisar e marcar o que já foi comprado.',
               style: TextStyle(fontSize: 16),
             ),
             SizedBox(height: 20),
@@ -48,8 +48,8 @@ class SobreView extends StatelessWidget {
             ),
             SizedBox(height: 8),
             Text(
-              '"Samuel Monsalves Moreira"',
-              style: TextStyle(fontSize: 33),
+              'Samuel Monsalves Moreira',
+              style: TextStyle(fontSize: 16),
             ),
           ],
         ),

@@ -49,6 +49,7 @@ class _Tela2ViewState extends State<Tela2View> {
             // Campo de Texto 3
             TextFormField(
               controller: txtValor3,
+              obscureText: true,
               decoration: InputDecoration(
                 labelText: 'Senha',
                 border: OutlineInputBorder(),
